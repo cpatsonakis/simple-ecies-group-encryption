@@ -18,7 +18,7 @@ module.exports.getReceiverECDHPublicKeyArray = function(encEnvelope) {
 
     })
     if (receiverECDHPublicKeyArray.length === 0) {
-        throw new Error('Unable to parse any of the receivers ECIES instances')
+        throw new Error('Unable to parse any of the receivers\' ECIES instances')
     }
     return receiverECDHPublicKeyArray;
 }
