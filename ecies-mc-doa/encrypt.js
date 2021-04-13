@@ -1,7 +1,7 @@
 'use strict';
 
 const mycrypto = require('../lib/crypto')
-const eciesdoads = require('../lib/ecies-doa-ds')
+const ecies = require('../lib/ecies')
 
 function generateOuterSymmetricEncryptionParams() {
     const entropyBuffer = mycrypto.getRandomBytes(mycrypto.params.symmetricCipherKeySize + mycrypto.params.macKeySize + mycrypto.params.ivSize)
@@ -18,9 +18,17 @@ function generateOuterSymmetricEncryptionParams() {
 function computeAndSerializeReceiversECIESInstances(senderECKeyPairPEM, symmetricEncryptionKey, ...receiverECPublicKeys) {
     let eciesInstancesArray = []
     receiverECPublicKeys.forEach(function (curReceiverECPublicKey) {
-        eciesInstancesArray.push(eciesdoads.encrypt(senderECKeyPairPEM, curReceiverECPublicKey, symmetricEncryptionKey))
+        eciesInstancesArray.push(ecies.encrypt(senderECKeyPairPEM, curReceiverECPublicKey, symmetricEncryptionKey))
     })
     return Buffer.from(JSON.stringify(eciesInstancesArray))
+}
+
+function senderMessageWrapAndSerialization(senderPublicKey, message, signature) {
+    return JSON.stringify({
+        from: senderPublicKey,
+        msg: message.toString(mycrypto.encodingFormat),
+        sig: signature.toString(mycrypto.encodingFormat)
+    });
 }
 
 module.exports.encrypt = function (senderECKeyPairPEM, message, ...receiverECPublicKeys) {
@@ -37,6 +45,9 @@ module.exports.encrypt = function (senderECKeyPairPEM, message, ...receiverECPub
     const receiversECIESInstancesArraySerialized = computeAndSerializeReceiversECIESInstances(senderECKeyPairPEM,
         Buffer.concat([symmetricEncryptionKey, macKey], symmetricEncryptionKey.length + macKey.length),
         ...receiverECPublicKeys)
+
+    const signature = mycrypto.computeDigitalSignature(senderECKeyPairPEM.privateKey, symmetricEncryptionKey)
+    const senderAuthMsgEnvelopeSerialized = senderMessageWrapAndSerialization(senderECKeyPairPEM.publicKey, message, signature)
 
 
     const ciphertext = mycrypto.symmetricEncrypt(symmetricEncryptionKey, message, iv)

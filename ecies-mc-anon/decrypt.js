@@ -1,44 +1,35 @@
 'use strict';
 
 const mycrypto = require('../lib/crypto')
-const jscrypto = require('crypto')
+const common = require('../common')
+const libcommon = require('../lib/common')
 const ecies = require('../lib/ecies')
 
 function checkEncryptedEnvelopeMandatoryProperties(encryptedEnvelope) {
     const mandatoryProperties = ["recvs", "ct", "iv", "tag"];
     mandatoryProperties.forEach((property) => {
-        if (typeof encryptedEnvelope[property] === undefined) {
+        if (typeof encryptedEnvelope[property] === 'undefined') {
             throw new Error("Mandatory property " + property + " is missing from input encrypted envelope");
         }
     })
 }
 
-function checkECIESEnvelopeMandatoryProperties(eciesEnvelope) {
-    const mandatoryProperties = ["to", "r", "ct", "iv", "tag"];
-    mandatoryProperties.forEach((property) => {
-        if (typeof eciesEnvelope[property] === undefined) {
-            throw new Error("Mandatory property " + property + " is missing from ECIES encrypted envelope");
-        }
-    })
+function isECIESEnvelopeForInputECDHPublicKey(eciesEnvelope, ecdhPublicKey) {
+    const envelopeECDHPublicKey = Buffer.from(eciesEnvelope.to_ecdh, mycrypto.encodingFormat)
+    return mycrypto.timingSafeEqual(envelopeECDHPublicKey, ecdhPublicKey);
 }
 
-function isECIESEnvelopeForInputECPublicKey(eciesEnvelope, ecPublicKey) {
-    let envelopeECPublicKey = Buffer.from(eciesEnvelope.to, mycrypto.encodingFormat)
-    return jscrypto.timingSafeEqual(envelopeECPublicKey, ecPublicKey);
-}
-
-function getKeyBufferFromReceiversArray(receiverECKeyPair, receiversBufferArray) {
-    let receiversECIESInstancesArray = JSON.parse(receiversBufferArray.toString())
+function getKeyBufferFromReceiversArray(receiverECDHKeyPair, receiversECIESInstancesString) {
+    let receiversECIESInstancesArray = JSON.parse(receiversECIESInstancesString)
     if (receiversECIESInstancesArray.length === 0) {
         throw new Error("Parsed an empty receivers ECIES instances array")
     }
     let myECIESInstanceFound = false;
     let keyBuffer;
-    let senderECPublicKey;
-    receiversECIESInstancesArray.forEach(function(curReceiverECIESInstance) {
-        checkECIESEnvelopeMandatoryProperties(curReceiverECIESInstance)
-        if (isECIESEnvelopeForInputECPublicKey(curReceiverECIESInstance, receiverECKeyPair.publicKey)) {
-            keyBuffer= ecies.decrypt(receiverECKeyPair.privateKey, curReceiverECIESInstance)
+    receiversECIESInstancesArray.forEach(function (curReceiverECIESInstance) {
+        libcommon.checkEncryptedEnvelopeMandatoryProperties(curReceiverECIESInstance)
+        if (isECIESEnvelopeForInputECDHPublicKey(curReceiverECIESInstance, receiverECDHKeyPair.publicKey)) {
+            keyBuffer = ecies.decrypt(receiverECDHKeyPair.privateKey, curReceiverECIESInstance)
             myECIESInstanceFound = true;
             return;
         }
@@ -61,21 +52,23 @@ function parseKeyBuffer(keyBuffer) {
     }
 }
 
-module.exports.decrypt = function(receiverECKeyPair, encEnvelope) {
+module.exports.decrypt = function (receiverECDHKeyPair, encEnvelope) {
 
     checkEncryptedEnvelopeMandatoryProperties(encEnvelope)
+    common.checkECDHKeyPairMandatoryProperties(receiverECDHKeyPair)
+
+    const keyBuffer = getKeyBufferFromReceiversArray(receiverECDHKeyPair, encEnvelope.recvs)
+    const { symmetricEncryptionKey, macKey } = parseKeyBuffer(keyBuffer)
 
     const ciphertext = Buffer.from(encEnvelope.ct, mycrypto.encodingFormat)
     const tag = Buffer.from(encEnvelope.tag, mycrypto.encodingFormat)
     const iv = Buffer.from(encEnvelope.iv, mycrypto.encodingFormat)
-    const receiversBufferArray = Buffer.from(encEnvelope.recvs, mycrypto.encodingFormat)
 
-    const keyBuffer = getKeyBufferFromReceiversArray(receiverECKeyPair, receiversBufferArray)
-    const { symmetricEncryptionKey, macKey } = parseKeyBuffer(keyBuffer)
-
-    if(!mycrypto.KMAC.verifyKMAC(tag,
+    if (!mycrypto.KMAC.verifyKMAC(tag,
         macKey,
-        Buffer.concat([ciphertext, iv, receiversBufferArray], ciphertext.length + iv.length + receiversBufferArray.length))) {
+        Buffer.concat([ciphertext, iv],
+            ciphertext.length + iv.length))
+    ) {
         throw new Error("Bad MAC")
     }
     return mycrypto.symmetricDecrypt(symmetricEncryptionKey, ciphertext, iv)
