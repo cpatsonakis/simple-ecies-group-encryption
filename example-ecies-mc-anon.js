@@ -27,7 +27,7 @@ console.log(encEnvelope)
 // ... Each recipient receives the encrypted envelope
 
 // Get all the ECDH public keys for which this message was encrypted for
-let receiverECDHPubKeyArray = ecies.getReceiverECDHPublicKeyArray(encEnvelope)
+let decodedRecipientECDHPublicKeyArray = ecies.getRecipientECDHPublicKeysFromEncEnvelope(encEnvelope)
 // ... each receiver here should attempt to find her corresponding ECDH private key
 // ... if no corresponding private key is found, the receiver should throw the message away
 let decMessage;

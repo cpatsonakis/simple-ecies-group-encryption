@@ -1,35 +1,48 @@
 const ecies = require('./ecies-mc-doa') //import the ECIES module
 const assert = require('assert').strict;
-// The next two lines are required to properly import and initialize the pskcrypto module
-$$ = {Buffer}; 
-const pskcrypto = require("./lib/pskcrypto");
+const crypto = require('crypto'); //import the default crypto module so that we can generate keys
+const curveName = require('./lib/crypto').params.curveName; //get the default named curve
+
 // The message we want to transmit, as a Buffer, which is what the encrypt() function expects
 const plainTextMessage = Buffer.from('hello world');
-let keyGenerator = pskcrypto.createKeyPairGenerator(); // Object that allows us to generate EC key pairs
-let aliceECKeyPair = keyGenerator.generateKeyPair(); // Generate Alice's EC key pair (message sender)
-const totalReceivers = 5;
-let receiversECKeyPairArray = [];
-let receiversECPublicKeyArray = [];
-for (let i = 0 ; i < totalReceivers ; i++) {
-    //Generate an EC key pair for each message receiver
-    receiversECKeyPairArray.push(keyGenerator.generateKeyPair())
-    receiversECPublicKeyArray.push(receiversECKeyPairArray[i].publicKey)
+const totalReceivers = 5; // we want to multicast the message to 5 different recipients 
+let receiverECDHPublicKeyArray = [];
+let receiverECDHKeyPairArray = [];
+let curReceiverECDH;
+// Generate the ECDH key pairs of all recipients
+for(let i = 0; i < totalReceivers; i++) {
+    curReceiverECDH = crypto.createECDH(curveName)
+    receiverECDHPublicKeyArray.push(curReceiverECDH.generateKeys())
+    receiverECDHKeyPairArray.push({
+        publicKey: curReceiverECDH.getPublicKey(),
+        privateKey: curReceiverECDH.getPrivateKey()
+    })
 }
-// We have to convert Alice's key pair to PEM format because that's what the encryption function expects
-let alicePEMKeyPair = keyGenerator.getPemKeys(aliceECKeyPair.privateKey, aliceECKeyPair.publicKey)
-
-// Encrypt the message. The function returns a JSON object that you can send over any communication
-// channel you want (e.g., HTTP, WS).
-let encEnvelope = ecies.encrypt(alicePEMKeyPair, plainTextMessage, ...receiversECPublicKeyArray)
-console.log("Encrypted Envelope:")
+// Generate Alice's EC signing key pair (message sender)
+let aliceECSigningKeyPair = crypto.generateKeyPairSync(
+    'ec',
+    {
+        namedCurve: curveName
+    }
+)
+// Encrypt the message for all the intended recipients
+let encEnvelope = ecies.encrypt(aliceECSigningKeyPair, plainTextMessage, ...receiverECDHPublicKeyArray)
+console.log('Encrypted Envelope:')
 console.log(encEnvelope)
-/*
-// Bob calls the decryption function and gets back an object.
-let decEnvelope = ecies.decrypt(bobECKeyPair.privateKey, encEnvelope)
-assert(Buffer.compare(decEnvelope.message, plainTextMessage) === 0, "MESSAGES ARE NOT EQUAL")
-assert(decEnvelope.from === alicePEMKeyPair.publicKey, "PUBLIC KEYS ARE NOT EQUAL")
-console.log("Decrypted Envelope:")
-console.log(decEnvelope)
+
+// ... The encrypted envelope is somehow multicast to all the recipients
+// ... Each recipient receives the encrypted envelope
+
+// Get all the ECDH public keys for which this message was encrypted for
+let decodedRecipientECDHPublicKeyArray = ecies.getRecipientECDHPublicKeysFromEncEnvelope(encEnvelope)
+// ... each receiver here should attempt to find her corresponding ECDH private key
+// ... if no corresponding private key is found, the receiver should throw the message away
+let decEnvelope;
+// We now decrypt with each recipient's ECDH key pair
+for(let i = 0 ; i < totalReceivers ; i++) {
+    decEnvelope = ecies.decrypt(receiverECDHKeyPairArray[i], encEnvelope)
+    assert(Buffer.compare(decEnvelope.message, plainTextMessage) === 0, "MESSAGES ARE NOT EQUAL")
+}
 // Here is the decrypted message!
 console.log('Decrypted message is: ' + decEnvelope.message);
-*/
+
