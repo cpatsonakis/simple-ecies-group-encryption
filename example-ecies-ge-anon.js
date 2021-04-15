@@ -5,7 +5,7 @@ const curveName = require('./lib/crypto').params.curveName; //get the default na
 
 // The message we want to transmit, as a Buffer, which is what the encrypt() function expects
 const plainTextMessage = Buffer.from('hello world');
-const totalReceivers = 5; // we want to multicast the message to 5 different recipients 
+const totalReceivers = 5; // we want to encrypt the message for 5 different recipients
 let receiverECDHPublicKeyArray = [];
 let receiverECDHKeyPairArray = [];
 let curReceiverECDH;
@@ -23,7 +23,7 @@ let encEnvelope = ecies.encrypt(plainTextMessage, ...receiverECDHPublicKeyArray)
 console.log('Encrypted Envelope:')
 console.log(encEnvelope)
 
-// ... The encrypted envelope is somehow multicast to all the recipients
+// ... The encrypted envelope is somehow transmitted to all the recipients
 // ... Each recipient receives the encrypted envelope
 
 // Get all the ECDH public keys for which this message was encrypted for

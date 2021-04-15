@@ -8,7 +8,7 @@ function checkEncryptedEnvelopeMandatoryProperties(encryptedEnvelope) {
     const mandatoryProperties = ["recvs", "ct", "iv", "tag"];
     mandatoryProperties.forEach((property) => {
         if (typeof encryptedEnvelope[property] === 'undefined') {
-            throw new Error("Mandatory property " + property + " is missing from input multicast encrypted envelope");
+            throw new Error("Mandatory property " + property + " is missing from input group encrypted envelope");
         }
     })
 }
