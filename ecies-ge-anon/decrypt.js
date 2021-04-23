@@ -5,7 +5,7 @@ const common = require('../common')
 const libcommon = require('../lib/common')
 
 function checkEncryptedEnvelopeMandatoryProperties(encryptedEnvelope) {
-    const mandatoryProperties = ["recvs", "ct", "iv", "tag"];
+    const mandatoryProperties = ["recvs", "rtag", "ct", "iv", "tag"];
     mandatoryProperties.forEach((property) => {
         if (typeof encryptedEnvelope[property] === 'undefined') {
             throw new Error("Mandatory property " + property + " is missing from input group encrypted envelope");
@@ -20,18 +20,26 @@ module.exports.decrypt = function (receiverECDHKeyPair, encEnvelope) {
     const receiverECIESInstancesBuffer = Buffer.from(encEnvelope.recvs, mycrypto.encodingFormat)
 
     const keyBuffer = common.receiverMultiRecipientECIESDecrypt(receiverECDHKeyPair, receiverECIESInstancesBuffer)
-    const { symmetricEncryptionKey, macKey } = common.parseKeyBuffer(keyBuffer)
+    const { symmetricCipherKey, ciphertextMacKey, recvsMacKey } = common.parseKeyBuffer(keyBuffer)
 
     const ciphertext = Buffer.from(encEnvelope.ct, mycrypto.encodingFormat)
     const tag = Buffer.from(encEnvelope.tag, mycrypto.encodingFormat)
     const iv = Buffer.from(encEnvelope.iv, mycrypto.encodingFormat)
+    const recvsTag = Buffer.from(encEnvelope.rtag, mycrypto.encodingFormat)
 
     if (!mycrypto.KMAC.verifyKMAC(tag,
-        macKey,
-        Buffer.concat([ciphertext, iv, receiverECIESInstancesBuffer],
-            ciphertext.length + iv.length + receiverECIESInstancesBuffer.length))
+        ciphertextMacKey,
+        Buffer.concat([ciphertext, iv],
+            ciphertext.length + iv.length))
     ) {
-        throw new Error("Bad MAC")
+        throw new Error("Bad ciphertext MAC")
     }
-    return mycrypto.symmetricDecrypt(symmetricEncryptionKey, ciphertext, iv)
+    if (!mycrypto.KMAC.verifyKMAC(recvsTag,
+        recvsMacKey,
+        receiverECIESInstancesBuffer)
+    ) {
+        throw new Error("Bad recipient ECIES MAC")
+    }
+
+    return mycrypto.symmetricDecrypt(symmetricCipherKey, ciphertext, iv)
 }

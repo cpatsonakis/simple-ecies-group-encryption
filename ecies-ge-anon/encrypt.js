@@ -13,21 +13,24 @@ module.exports.encrypt = function (message, ...receiverECDHPublicKeys) {
         throw new Error('Need to specify at least one receiver public key')
     }
 
-    const { symmetricEncryptionKey, macKey, iv } = common.generateOuterSymmetricEncryptionParams()
+    const { symmetricCipherKey, ciphertextMacKey, recvsMacKey } = common.generateKeyBufferParams()
     const multiRecipientECIESBuffer = common.senderMultiRecipientECIESEncrypt(
-        Buffer.concat([symmetricEncryptionKey, macKey], symmetricEncryptionKey.length + macKey.length),
+        Buffer.concat([symmetricCipherKey, ciphertextMacKey, recvsMacKey],
+            symmetricCipherKey.length + ciphertextMacKey.length + recvsMacKey.length),
         ...receiverECDHPublicKeys)
 
-
-    const ciphertext = mycrypto.symmetricEncrypt(symmetricEncryptionKey, message, iv)
-    const tag = mycrypto.KMAC.computeKMAC(macKey,
+    const iv = mycrypto.getRandomBytes(mycrypto.params.ivSize)
+    const ciphertext = mycrypto.symmetricEncrypt(symmetricCipherKey, message, iv)
+    const tag = mycrypto.KMAC.computeKMAC(ciphertextMacKey,
         Buffer.concat(
-            [ciphertext, iv, multiRecipientECIESBuffer],
-            ciphertext.length + iv.length + multiRecipientECIESBuffer.length)
+            [ciphertext, iv],
+            ciphertext.length + iv.length)
     )
+    const recvsTag = mycrypto.KMAC.computeKMAC(recvsMacKey, multiRecipientECIESBuffer)
 
     return {
         recvs: multiRecipientECIESBuffer.toString(mycrypto.encodingFormat),
+        rtag: recvsTag.toString(mycrypto.encodingFormat),
         ct: ciphertext.toString(mycrypto.encodingFormat),
         iv: iv.toString(mycrypto.encodingFormat),
         tag: tag.toString(mycrypto.encodingFormat)

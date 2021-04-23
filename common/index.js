@@ -4,7 +4,7 @@ const sender = require('./sender')
 const recipient = require('./recipient')
 
 module.exports = {
-    generateOuterSymmetricEncryptionParams: sender.generateOuterSymmetricEncryptionParams,
+    generateKeyBufferParams: sender.generateKeyBufferParams,
     senderMultiRecipientECIESEncrypt: sender.senderMultiRecipientECIESEncrypt,
     getRecipientECDHPublicKeysFromEncEnvelope: recipient.getRecipientECDHPublicKeysFromEncEnvelope,
     receiverMultiRecipientECIESDecrypt: recipient.receiverMultiRecipientECIESDecrypt,

@@ -1,12 +1,11 @@
 'use strict';
 
 const mycrypto = require('../lib/crypto')
-const common = require('../common')
 const libcommon = require('../lib/common')
-const crypto = require('crypto')
+const eciesGEAnon = require('../ecies-ge-anon')
 
 function checkEncryptedEnvelopeMandatoryProperties(encryptedEnvelope) {
-    const mandatoryProperties = ["recvs", "ct", "iv", "tag", "from_ecsig", "sig"];
+    const mandatoryProperties = ["from_ecsig", "sig"];
     mandatoryProperties.forEach((property) => {
         if (typeof encryptedEnvelope[property] === 'undefined') {
             throw new Error("Mandatory property " + property + " is missing from input encrypted envelope");
@@ -14,41 +13,32 @@ function checkEncryptedEnvelopeMandatoryProperties(encryptedEnvelope) {
     })
 }
 
-module.exports.decrypt = function(receiverECDHKeyPair, encEnvelope) {
+module.exports.decrypt = function (receiverECDHKeyPair, encEnvelope) {
 
     checkEncryptedEnvelopeMandatoryProperties(encEnvelope)
     libcommon.checkKeyPairMandatoryProperties(receiverECDHKeyPair)
 
+    let tempGEAnonEnvelope = Object.assign({}, encEnvelope)
+    delete tempGEAnonEnvelope.from_ecsig;
+    delete tempGEAnonEnvelope.sig;
+    const message = eciesGEAnon.decrypt(receiverECDHKeyPair, tempGEAnonEnvelope)
+    tempGEAnonEnvelope = null;
 
-    const ciphertext = Buffer.from(encEnvelope.ct, mycrypto.encodingFormat)
-    const tag = Buffer.from(encEnvelope.tag, mycrypto.encodingFormat)
-    const iv = Buffer.from(encEnvelope.iv, mycrypto.encodingFormat)
-    const receiverECIESInstancesBuffer = Buffer.from(encEnvelope.recvs, mycrypto.encodingFormat)
+    const senderECSigVerPublicKey = mycrypto.PublicKeyDeserializer.deserializeECSigVerPublicKey(encEnvelope.from_ecsig)
 
-    const keyBuffer = common.receiverMultiRecipientECIESDecrypt(receiverECDHKeyPair, receiverECIESInstancesBuffer)
-    const { symmetricEncryptionKey, macKey } = common.parseKeyBuffer(keyBuffer)
-
-    if (!mycrypto.KMAC.verifyKMAC(tag,
-        macKey,
-        Buffer.concat([ciphertext, iv, receiverECIESInstancesBuffer],
-            ciphertext.length + iv.length + receiverECIESInstancesBuffer.length))
-    ) {
-        throw new Error("Bad MAC")
-    }
-
-    const senderECSigVerPublicKey = crypto.createPublicKey({
-        key: encEnvelope.from_ecsig,
-        format: 'pem',
-        type: 'spki'
-    })
+    const recvsTagBuffer = Buffer.from(encEnvelope.rtag, mycrypto.encodingFormat)
+    const tagBuffer = Buffer.from(encEnvelope.tag, mycrypto.encodingFormat)
+    const signature = Buffer.from(encEnvelope.sig, mycrypto.encodingFormat)
     if (!mycrypto.verifyDigitalSignature(senderECSigVerPublicKey,
-        Buffer.from(encEnvelope.sig, mycrypto.encodingFormat),
-        tag)) {
+        signature,
+        Buffer.concat([recvsTagBuffer, tagBuffer],
+            recvsTagBuffer.length + tagBuffer.length))
+    ) {
         throw new Error("Bad signature")
     }
-    
+
     return {
         from: senderECSigVerPublicKey,
-        message: mycrypto.symmetricDecrypt(symmetricEncryptionKey, ciphertext, iv)
+        message: message
     }
 }

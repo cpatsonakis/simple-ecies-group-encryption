@@ -17,7 +17,6 @@ module.exports.getRecipientECDHPublicKeysFromEncEnvelope = function (encEnvelope
         libcommon.checkEncryptedEnvelopeMandatoryProperties(curRecipientECIESEnvelope)
         let curRecipientECDHPublicKey = libcommon.getDecodedECDHPublicKeyFromEncEnvelope(curRecipientECIESEnvelope)
         recipientECDHPublicKeyArray.push(curRecipientECDHPublicKey)
-
     })
     if (recipientECDHPublicKeyArray.length === 0) {
         throw new Error('Unable to parse any of the receivers\' ECIES instances')
@@ -26,8 +25,9 @@ module.exports.getRecipientECDHPublicKeysFromEncEnvelope = function (encEnvelope
 }
 
 function isECIESEnvelopeForInputECDHPublicKey(eciesEnvelope, ecdhPublicKey) {
-    const envelopeECDHPublicKey = Buffer.from(eciesEnvelope.to_ecdh, mycrypto.encodingFormat)
-    return mycrypto.timingSafeEqual(envelopeECDHPublicKey, ecdhPublicKey);
+    const ecdhPublicKeyBuffer = Buffer.from(mycrypto.PublicKeySerializer.serializeECDHPublicKey(ecdhPublicKey))
+    const envelopeECDHPublicKey = Buffer.from(eciesEnvelope.to_ecdh)
+    return mycrypto.timingSafeEqual(envelopeECDHPublicKey, ecdhPublicKeyBuffer);
 }
 
 module.exports.receiverMultiRecipientECIESDecrypt = function(receiverECDHKeyPair, multiRecipientECIESBuffer) {
@@ -52,13 +52,15 @@ module.exports.receiverMultiRecipientECIESDecrypt = function(receiverECDHKeyPair
 }
 
 module.exports.parseKeyBuffer = function (keyBuffer) {
-    if (keyBuffer.length != (mycrypto.params.symmetricCipherKeySize + mycrypto.params.macKeySize)) {
+    if (keyBuffer.length != (mycrypto.params.symmetricCipherKeySize + (2*mycrypto.params.macKeySize))) {
         throw new Error("Invalid length of decrypted key buffer")
     }
-    const symmetricEncryptionKey = keyBuffer.slice(0, mycrypto.params.symmetricCipherKeySize)
-    const macKey = keyBuffer.slice(mycrypto.params.symmetricCipherKeySize)
+    const symmetricCipherKey = keyBuffer.slice(0, mycrypto.params.symmetricCipherKeySize)
+    const ciphertextMacKey = keyBuffer.slice(mycrypto.params.symmetricCipherKeySize, mycrypto.params.symmetricCipherKeySize + mycrypto.params.macKeySize)
+    const recvsMacKey = keyBuffer.slice(mycrypto.params.symmetricCipherKeySize + mycrypto.params.macKeySize)
     return {
-        symmetricEncryptionKey,
-        macKey
+        symmetricCipherKey,
+        ciphertextMacKey,
+        recvsMacKey
     }
 }

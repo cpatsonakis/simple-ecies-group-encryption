@@ -51,8 +51,8 @@ for (i = 0 ; i < iterations ; ++i) {
 totalHRTime = process.hrtime(startTime);
 var averageDecTimeSecs = ((totalHRTime[0]* NS_PER_SEC + totalHRTime[1]) / NS_PER_SEC)  / iterations
 
-console.log("ECIES-MC-DOA Benchmark Inputs: " + msgRecipients + " message recipients, message_size = " + msgSize + " bytes and " + iterations + " iterations per operation.")
-console.log("Encryption benchmark results: Average Time = " + averageEncTimeSecs + " (secs), Average Throughput = " + (1.0/averageEncTimeSecs) + " (ops/sec)")
-console.log("Decryption benchmark results: Average Time = " + averageDecTimeSecs + " (secs), Average Throughput = " + (1.0/averageDecTimeSecs) + " (ops/sec)")
+console.log("ECIES-GE-DOA Benchmark Inputs: " + msgRecipients + " message recipients, message_size = " + msgSize + " bytes and " + iterations + " iterations per operation.")
+console.log("Encryption benchmark results: Average Time = " + averageEncTimeSecs + " (secs)")
+console.log("Decryption benchmark results: Average Time = " + averageDecTimeSecs + " (secs)")
 
 
